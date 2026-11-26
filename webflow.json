@@ -1,0 +1,9 @@
+{
+  "name": "Finsweet Attributes v2 Debugger",
+  "apiVersion": "2",
+  "size": "comfortable",
+  "publicDir": "dist",
+  "featureFlags": {
+    "expandedAppModes": true
+  }
+}
