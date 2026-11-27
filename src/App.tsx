@@ -29,6 +29,7 @@ import {
   createWebflowDesignerClient,
   type DesignerClient,
   type ElementRef,
+  type ExtensionSize,
 } from './webflow/designer-client';
 
 type View = 'dashboard' | 'issues' | 'solutions' | 'history' | 'settings';
@@ -40,16 +41,20 @@ interface StatusMessage {
   text: string;
 }
 
-const VIEWS: Array<{ id: View; label: string }> = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'issues', label: 'Issues' },
-  { id: 'solutions', label: 'Solutions' },
-  { id: 'history', label: 'History' },
-  { id: 'settings', label: 'Settings' },
+const VIEWS: Array<{ id: View; label: string; icon: string }> = [
+  { id: 'dashboard', label: 'Overview', icon: '✦' },
+  { id: 'issues', label: 'Issues', icon: '✓' },
+  { id: 'solutions', label: 'Solutions', icon: '◈' },
+  { id: 'history', label: 'History', icon: '↺' },
+  { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
 
 function severityClass(severity: Severity): string {
   return `pill pill-${severity}`;
+}
+
+function severityIcon(severity: Severity): string {
+  return { error: '!', warning: '~', verify: '?', info: 'i' }[severity];
 }
 
 function formatTime(iso: string): string {
@@ -152,7 +157,7 @@ export default function App() {
 
       setScanning(true);
       setError(null);
-      setStatus({ kind: 'info', text: 'Scanning current page…' });
+      setStatus({ kind: 'info', text: 'Checking this page…' });
       try {
         const snapshot = await scanDesigner(target);
         const next = runRules(snapshot);
@@ -161,7 +166,7 @@ export default function App() {
         const count = next.context.solutions.length;
         setStatus({
           kind: 'success',
-          text: count > 0 ? `Scan complete — ${next.issues.length} issue${next.issues.length === 1 ? '' : 's'}.` : 'Scan complete — no v2 markers found.',
+          text: count > 0 ? `All done — ${next.issues.length} thing${next.issues.length === 1 ? '' : 's'} to look at.` : 'All done — no v2 setup found here yet.',
         });
       } catch (scanError) {
         const message = scanError instanceof Error ? scanError.message : String(scanError);
@@ -178,6 +183,7 @@ export default function App() {
     try {
       const webflowClient = createWebflowDesignerClient();
       setClient(webflowClient);
+      void webflowClient.setExtensionSize({ width: 460, height: 700 }).catch(() => undefined);
       void performScan(webflowClient);
     } catch (initError) {
       setError(initError instanceof Error ? initError.message : String(initError));
@@ -283,15 +289,17 @@ export default function App() {
     setStatus({ kind: 'success', text: 'History cleared.' });
   };
 
-  const handleResize = (size: 'compact' | 'comfortable' | 'large') => {
-    const wf = (globalThis as unknown as { webflow?: { setExtensionSize?: (value: string) => Promise<unknown> } }).webflow;
-    if (!wf?.setExtensionSize) {
+  const handleResize = async (size: ExtensionSize, label: string) => {
+    if (!client) {
       setStatus({ kind: 'error', text: 'Panel resize is only available inside Webflow.' });
       return;
     }
-    void wf.setExtensionSize(size).then(() => {
-      setStatus({ kind: 'success', text: `Panel size set to ${size}.` });
-    });
+    try {
+      await client.setExtensionSize(size);
+      setStatus({ kind: 'success', text: `Panel opened at ${label}.` });
+    } catch {
+      setStatus({ kind: 'error', text: 'Webflow could not resize the panel.' });
+    }
   };
 
   const hasMarkers = Boolean(result && result.context.solutions.length > 0);
@@ -305,7 +313,7 @@ export default function App() {
           <p>Independent developer tool. Not affiliated with Finsweet.</p>
         </div>
         <button className="button button-primary" onClick={() => void performScan()} disabled={scanning || !client}>
-          {scanning ? 'Scanning…' : 'Scan'}
+          {scanning ? 'Checking…' : 'Scan page'}
         </button>
       </header>
 
@@ -320,6 +328,7 @@ export default function App() {
             }}
             aria-current={view === item.id ? 'page' : undefined}
           >
+            <span className="tab-icon" aria-hidden="true">{item.icon}</span>
             {item.label}
             {item.id === 'issues' && result ? <span className="tab-count">{result.issues.length}</span> : null}
           </button>
@@ -330,9 +339,9 @@ export default function App() {
 
       {error ? (
         <div className="notice notice-error" role="alert">
-          <strong>Designer connection issue</strong>
+          <strong>Couldn’t reach Webflow</strong>
           <p>{error}</p>
-          <button className="button" onClick={() => void performScan()}>Retry</button>
+          <button className="button button-primary" onClick={() => void performScan()}>Try again</button>
         </div>
       ) : null}
 
@@ -420,24 +429,25 @@ function Dashboard({ result, score, scanning, onScan, onOpenIssues, onOpenSoluti
       <section className="panel score-panel">
         <div className="panel-heading">
           <div>
-            <span className="eyebrow">Current page</span>
-            <h2>{result?.snapshot.pageName ?? 'Waiting for Designer'}</h2>
+            <span className="eyebrow">Let’s take a look</span>
+            <h2>{result?.snapshot.pageName ?? 'Waiting for Webflow'}</h2>
+            <p className="panel-subtitle">We check the page you’re designing — nothing else.</p>
           </div>
-          <span className={`badge ${hasMarkers ? 'badge-live' : ''}`}>{hasMarkers ? 'v2 detected' : 'No markers'}</span>
+          <span className={`badge ${hasMarkers ? 'badge-live' : ''}`}>{hasMarkers ? 'v2 found' : 'No v2 yet'}</span>
         </div>
 
         <div className="score-row">
           <ScoreRing value={score.value} label={score.label} />
           <div className="score-copy">
-            <p>{score.summary}</p>
+            <p className="score-headline">{score.summary}</p>
             {!hasMarkers ? (
-              <p className="muted small">No Finsweet Attributes v2 markers were detected on this page. This is not a health failure.</p>
+              <p className="muted small">This page doesn’t use v2 attributes yet. That’s totally fine — open a page that does and scan again.</p>
             ) : null}
             <div className="severity-grid">
-              <div><strong className="text-bad">{score.counts.error}</strong><span>Errors</span></div>
-              <div><strong className="text-warn">{score.counts.warning}</strong><span>Warnings</span></div>
+              <div><strong className="text-bad">{score.counts.error}</strong><span>To fix</span></div>
+              <div><strong className="text-warn">{score.counts.warning}</strong><span>Check</span></div>
               <div><strong>{score.counts.verify}</strong><span>Verify</span></div>
-              <div><strong className="text-good">{score.counts.info}</strong><span>Info</span></div>
+              <div><strong className="text-good">{score.counts.info}</strong><span>Tips</span></div>
             </div>
           </div>
         </div>
@@ -445,13 +455,16 @@ function Dashboard({ result, score, scanning, onScan, onOpenIssues, onOpenSoluti
 
       <section className="panel">
         <div className="panel-heading">
-          <h2>Detected solutions</h2>
-          <button className="link-button" onClick={onOpenSolutions}>View all →</button>
+          <div>
+            <h2>What we found</h2>
+            <p className="panel-subtitle">Solutions detected from v2 attributes on this page.</p>
+          </div>
+          <button className="link-button" onClick={onOpenSolutions}>Details →</button>
         </div>
         {solutions.length === 0 ? (
           <EmptyState
-            title="No Finsweet v2 markers"
-            body="Add v2 attributes to the current page, then run a scan. Legacy fs-cms* attributes are intentionally ignored."
+            title="No v2 setup here yet"
+            body="Add a Finsweet v2 attribute to this page, then scan again. Legacy fs-cms* attributes are ignored on purpose."
           />
         ) : (
           <div className="chip-grid">
@@ -466,8 +479,8 @@ function Dashboard({ result, score, scanning, onScan, onOpenIssues, onOpenSoluti
       </section>
 
       <section className="panel quick-actions">
-        <button className="button button-primary" onClick={onScan} disabled={scanning || !result}>{scanning ? 'Scanning…' : 'Rescan page'}</button>
-        <button className="button" onClick={onOpenIssues} disabled={!result}>Review issues</button>
+        <button className="button button-primary" onClick={onScan} disabled={scanning || !result}>{scanning ? 'Checking…' : 'Check again'}</button>
+        <button className="button" onClick={onOpenIssues} disabled={!result}>See what to fix</button>
       </section>
     </div>
   );
@@ -476,7 +489,7 @@ function Dashboard({ result, score, scanning, onScan, onOpenIssues, onOpenSoluti
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="empty-state">
-      <div className="empty-icon" aria-hidden="true">◇</div>
+      <div className="empty-icon" aria-hidden="true">✦</div>
       <strong>{title}</strong>
       <p>{body}</p>
     </div>
@@ -543,16 +556,16 @@ function IssuesView({
         </div>
       </section>
 
-      <div className="list-meta">{issues.length} of {total} issues</div>
+      <div className="list-meta">{issues.length} of {total} shown</div>
 
       {issues.length === 0 ? (
-        <EmptyState title="No matching issues" body="Adjust the filters, or rescan the page after making changes." />
+        <EmptyState title="Nothing here to worry about" body="Try another filter, or scan again after you make a change." />
       ) : (
         <div className="issue-list">
           {issues.map((issue) => (
             <button className="issue-card" key={issue.id} onClick={() => onSelect(issue.id)}>
               <div className="issue-card-top">
-                <span className={severityClass(issue.severity)}>{issue.severity}</span>
+                <span className={severityClass(issue.severity)}><span aria-hidden="true">{severityIcon(issue.severity)}</span> {issue.severity}</span>
                 <span className="issue-rule">{issue.ruleId}</span>
                 {reviewed.includes(issue.id) ? <span className="reviewed-mark">Reviewed</span> : null}
               </div>
@@ -584,10 +597,10 @@ interface IssueDetailProps {
 function IssueDetail({ issue, fixing, reviewed, onBack, onLocate, onFix, onCopy, onReviewed }: IssueDetailProps) {
   return (
     <div className="view-stack">
-      <button className="back-button" onClick={onBack}>← Back to issues</button>
+      <button className="back-button" onClick={onBack}>← All issues</button>
       <section className="panel detail-panel">
         <div className="issue-card-top">
-          <span className={severityClass(issue.severity)}>{issue.severity}</span>
+          <span className={severityClass(issue.severity)}><span aria-hidden="true">{severityIcon(issue.severity)}</span> {issue.severity}</span>
           <span className="confidence">{issue.confidence.replace('-', ' ')}</span>
           <span className="issue-rule">{issue.ruleId}</span>
         </div>
@@ -639,11 +652,11 @@ function IssueDetail({ issue, fixing, reviewed, onBack, onLocate, onFix, onCopy,
         ) : null}
 
         <div className="detail-actions">
-          <button className="button" onClick={onLocate} disabled={issue.elementIds.length === 0}>Locate element</button>
+          <button className="button" onClick={onLocate} disabled={issue.elementIds.length === 0}>Find on canvas</button>
           <button className="button button-primary" onClick={onFix} disabled={!issue.fix || fixing}>
-            {fixing ? 'Applying…' : issue.fix ? 'Apply safe fix' : 'No safe fix'}
+            {fixing ? 'Fixing…' : issue.fix ? 'Fix it for me' : 'Manual fix only'}
           </button>
-          <button className="button button-ghost" onClick={onReviewed}>{reviewed ? 'Mark unreviewed' : 'Mark reviewed'}</button>
+          <button className="button button-ghost" onClick={onReviewed}>{reviewed ? 'Need another look' : 'I’ll handle this'}</button>
         </div>
 
         {issue.fix ? (
@@ -763,7 +776,7 @@ function SettingsView({
 }: {
   settings: ExtensionSettings;
   onSetting: <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => void;
-  onResize: (size: 'compact' | 'comfortable' | 'large') => void;
+  onResize: (size: ExtensionSize, label: string) => void;
   onClearHistory: () => void;
 }) {
   return (
@@ -798,11 +811,11 @@ function SettingsView({
 
       <section className="panel">
         <h2>Panel size</h2>
-        <p className="muted small">Choose a width that fits your Designer workspace.</p>
+        <p className="muted small">The panel opens at a spacious 460 × 700 by default. Pick what feels best.</p>
         <div className="button-row">
-          <button className="button" onClick={() => onResize('compact')}>Compact</button>
-          <button className="button" onClick={() => onResize('comfortable')}>Comfortable</button>
-          <button className="button" onClick={() => onResize('large')}>Large</button>
+          <button className="button" onClick={() => onResize({ width: 340, height: 560 }, 'compact 340 × 560')}>Compact</button>
+          <button className="button" onClick={() => onResize({ width: 400, height: 640 }, 'comfortable 400 × 640')}>Comfortable</button>
+          <button className="button button-primary" onClick={() => onResize({ width: 460, height: 700 }, 'spacious 460 × 700')}>Spacious</button>
         </div>
       </section>
 

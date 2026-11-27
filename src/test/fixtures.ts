@@ -116,6 +116,9 @@ export function createFakeClient(elements: FakeElement[], options: FakeClientOpt
     async setSelectedElement(element) {
       selectedIds.push(String(element.id));
     },
+    async setExtensionSize() {
+      return;
+    },
     subscribe() {
       return () => undefined;
     },

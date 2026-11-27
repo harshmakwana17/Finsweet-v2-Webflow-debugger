@@ -12,6 +12,13 @@ export interface PageInfo {
 
 export type DesignerEvent = 'currentpage' | 'selectedelement' | 'currentappmode';
 
+export type ExtensionSize =
+  | 'default'
+  | 'compact'
+  | 'comfortable'
+  | 'large'
+  | { width: number; height: number };
+
 export interface DesignerClient {
   getPageInfo(): Promise<PageInfo>;
   getAllElements(): Promise<ElementRef[]>;
@@ -25,6 +32,7 @@ export interface DesignerClient {
   getCollectionPaginationEnabled(element: ElementRef): Promise<boolean | null>;
   getCustomCodeSources(): Promise<string[]>;
   setSelectedElement(element: ElementRef): Promise<void>;
+  setExtensionSize(size: ExtensionSize): Promise<void>;
   subscribe(
     event: DesignerEvent,
     callback: (...args: unknown[]) => void
@@ -249,6 +257,11 @@ export function createWebflowDesignerClient(): DesignerClient {
 
     async setSelectedElement(element) {
       await webflow.setSelectedElement(element);
+    },
+
+    async setExtensionSize(size) {
+      if (typeof webflow.setExtensionSize !== 'function') return;
+      await webflow.setExtensionSize(size);
     },
 
     subscribe(event, callback) {

@@ -24,7 +24,7 @@ export function calculateScore(issues: Issue[], hasV2Markers: boolean): HealthSc
     return {
       value: null,
       label: 'Not applicable',
-      summary: 'No Finsweet Attributes v2 markers were detected on this page.',
+      summary: 'No v2 setup found on this page — nothing to score yet.',
       counts,
     };
   }
@@ -37,8 +37,8 @@ export function calculateScore(issues: Issue[], hasV2Markers: boolean): HealthSc
 
   return {
     value,
-    label: value >= 90 ? 'Healthy' : value >= 70 ? 'Needs attention' : 'Needs fixes',
-    summary: `${value} — ${counts.error} error${counts.error === 1 ? '' : 's'}, ${counts.warning} warning${counts.warning === 1 ? '' : 's'}${counts.verify > 0 ? `, ${counts.verify} to verify` : ''}.`,
+    label: value >= 90 ? 'Looking good' : value >= 70 ? 'Almost there' : 'Needs a little love',
+    summary: `Score ${value} · ${counts.error} to fix, ${counts.warning} to check${counts.verify > 0 ? `, ${counts.verify} to verify` : ''}.`,
     counts,
   };
 }
